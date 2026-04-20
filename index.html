@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>IGCQ Golf Handicap Tracker</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS CDN (ok for development) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase SDK -->
     <script type="module">
-        // Import Firebase modules (will be initialized after setup)
+        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // Your Firebase configuration (replace with your own)
+        // Your Firebase configuration (REPLACE with your own!)
         const firebaseConfig = {
             apiKey: "AIzaSyDiuq0dT3Zdh4eyUR-mVejHhIJ3wsI-Y0M",
   authDomain: "igcq-handicap-app.firebaseapp.com",
@@ -29,7 +29,7 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Make them global for other scripts
+        // Expose everything to global (for use in non-module script below)
         window.db = db;
         window.auth = auth;
         window.setDoc = setDoc;
@@ -40,9 +40,12 @@
         window.collection = collection;
         window.query = query;
         window.where = where;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.signOut = signOut;
     </script>
     <style>
-        /* Custom scrollbar for tables */
         .overflow-x-auto::-webkit-scrollbar { height: 6px; }
         .overflow-x-auto::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
         .overflow-x-auto::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
@@ -50,20 +53,18 @@
 </head>
 <body class="bg-gray-100">
     <div id="app" class="min-h-screen">
-        <!-- Auth UI (shown when not logged in) -->
+        <!-- Auth UI -->
         <div id="authContainer" class="min-h-screen flex items-center justify-center bg-gray-100">
             <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
                 <div class="flex mb-6 border-b">
                     <button id="loginTab" class="w-1/2 py-2 text-center font-semibold text-blue-600 border-b-2 border-blue-600">Login</button>
                     <button id="registerTab" class="w-1/2 py-2 text-center text-gray-500">Register</button>
                 </div>
-                <!-- Login Form -->
                 <div id="loginForm">
                     <input type="email" id="loginEmail" placeholder="Email" class="w-full p-2 border rounded mb-3" required>
                     <input type="password" id="loginPassword" placeholder="Password" class="w-full p-2 border rounded mb-4" required>
                     <button id="loginBtn" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
                 </div>
-                <!-- Register Form (hidden initially) -->
                 <div id="registerForm" class="hidden">
                     <input type="text" id="regName" placeholder="Full Name" class="w-full p-2 border rounded mb-3" required>
                     <input type="email" id="regEmail" placeholder="Email" class="w-full p-2 border rounded mb-3" required>
@@ -74,7 +75,7 @@
             </div>
         </div>
 
-        <!-- Main App UI (shown after login) -->
+        <!-- Main App -->
         <div id="mainApp" class="hidden">
             <div class="container mx-auto p-4 max-w-6xl">
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
@@ -94,49 +95,35 @@
                     <button id="submitRoundBtn" class="mt-4 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 w-full sm:w-auto">Submit Round</button>
                 </div>
 
-                <!-- Current Handicap Card -->
+                <!-- Handicap Card -->
                 <div class="bg-green-100 rounded-lg shadow p-4 mb-6 text-center">
                     <h2 class="text-lg font-semibold">Your Handicap Index</h2>
                     <p id="handicapValue" class="text-4xl font-bold text-green-700">36.0</p>
                     <p class="text-sm text-gray-600">Based on average of last 3 rounds (max 36)</p>
                 </div>
 
-                <!-- Recent Rounds Table -->
+                <!-- Recent Rounds -->
                 <div class="bg-white rounded-lg shadow p-5 mb-6">
                     <h2 class="text-xl font-semibold mb-3">Your Recent Rounds</h2>
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
                             <thead class="bg-gray-200">
-                                <tr>
-                                    <th class="py-2 px-3 text-left">Date</th>
-                                    <th class="py-2 px-3 text-left">Course</th>
-                                    <th class="py-2 px-3 text-left">Gross</th>
-                                    <th class="py-2 px-3 text-left">Differential</th>
-                                </tr>
+                                <tr><th class="py-2 px-3 text-left">Date</th><th class="py-2 px-3 text-left">Course</th><th class="py-2 px-3 text-left">Gross</th><th class="py-2 px-3 text-left">Differential</th></tr>
                             </thead>
-                            <tbody id="roundsTableBody">
-                                <tr><td colspan="4" class="text-center py-4">Loading...</td></tr>
-                            </tbody>
+                            <tbody id="roundsTableBody"><tr><td colspan="4" class="text-center py-4">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Club Handicap Summary -->
+                <!-- Club Summary -->
                 <div class="bg-white rounded-lg shadow p-5">
                     <h2 class="text-xl font-semibold mb-3">Club Handicap Summary</h2>
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
                             <thead class="bg-gray-200">
-                                <tr>
-                                    <th class="py-2 px-3 text-left">Player</th>
-                                    <th class="py-2 px-3 text-left">Rounds</th>
-                                    <th class="py-2 px-3 text-left">Handicap</th>
-                                    <th class="py-2 px-3 text-left">Grade</th>
-                                </tr>
+                                <tr><th class="py-2 px-3 text-left">Player</th><th class="py-2 px-3 text-left">Rounds</th><th class="py-2 px-3 text-left">Handicap</th><th class="py-2 px-3 text-left">Grade</th></tr>
                             </thead>
-                            <tbody id="summaryTableBody">
-                                <tr><td colspan="4" class="text-center py-4">Loading...</td></tr>
-                            </tbody>
+                            <tbody id="summaryTableBody"><tr><td colspan="4" class="text-center py-4">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -145,12 +132,12 @@
     </div>
 
     <script type="module">
-        // Wait for Firebase to be ready
+        // Wait for Firebase globals
         let db, auth, setDoc, getDoc, getDocs, updateDoc, doc, collection, query, where;
+        let createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut;
         let currentUser = null;
 
-        // Get references after Firebase init
-        function initFirebaseRefs() {
+        function init() {
             db = window.db;
             auth = window.auth;
             setDoc = window.setDoc;
@@ -161,19 +148,21 @@
             collection = window.collection;
             query = window.query;
             where = window.where;
+            createUserWithEmailAndPassword = window.createUserWithEmailAndPassword;
+            signInWithEmailAndPassword = window.signInWithEmailAndPassword;
+            onAuthStateChanged = window.onAuthStateChanged;
+            signOut = window.signOut;
         }
+        init();
 
-        // Helper: calculate handicap from rounds array
         function calculateHandicap(rounds) {
             if (!rounds || rounds.length === 0) return 36;
-            // Use last 3 rounds (most recent first? We'll sort by date descending and take last 3)
             const sorted = [...rounds].sort((a,b) => new Date(b.date) - new Date(a.date));
             const lastThree = sorted.slice(0, 3);
             const avg = lastThree.reduce((sum, r) => sum + r.differential, 0) / lastThree.length;
             return Math.min(avg, 36);
         }
 
-        // Save round to Firestore
         async function addRound(gross, courseRating, slope, courseName) {
             if (!currentUser) return;
             const diff = ((gross - courseRating) * 113) / slope;
@@ -188,10 +177,7 @@
             };
             const userRef = doc(db, "users", currentUser.uid);
             const userSnap = await getDoc(userRef);
-            let rounds = [];
-            if (userSnap.exists()) {
-                rounds = userSnap.data().rounds || [];
-            }
+            let rounds = userSnap.exists() ? (userSnap.data().rounds || []) : [];
             rounds.push(newRound);
             const newHandicap = calculateHandicap(rounds);
             await setDoc(userRef, {
@@ -203,7 +189,6 @@
             return { rounds, handicap: newHandicap };
         }
 
-        // Load current user's data
         async function loadUserData() {
             if (!currentUser) return;
             const userRef = doc(db, "users", currentUser.uid);
@@ -228,7 +213,6 @@
                     `).join('');
                 }
             } else {
-                // New user
                 document.getElementById("handicapValue").innerText = "36.0";
                 document.getElementById("roundsTableBody").innerHTML = '<tr><td colspan="4" class="text-center py-4">No rounds yet</td></tr>';
                 await setDoc(doc(db, "users", currentUser.uid), {
@@ -240,7 +224,6 @@
             }
         }
 
-        // Load club summary (all users)
         async function loadClubSummary() {
             const querySnapshot = await getDocs(collection(db, "users"));
             const users = [];
@@ -248,10 +231,7 @@
                 const data = docSnap.data();
                 const roundsCount = data.rounds ? data.rounds.length : 0;
                 const handicap = data.handicap !== undefined ? data.handicap : 36;
-                let grade = '';
-                if (handicap <= 18) grade = 'A';
-                else if (handicap <= 30) grade = 'B';
-                else grade = 'C';
+                let grade = handicap <= 18 ? 'A' : (handicap <= 30 ? 'B' : 'C');
                 users.push({
                     name: data.name || data.email.split('@')[0],
                     rounds: roundsCount,
@@ -277,7 +257,6 @@
 
         // Auth state observer
         onAuthStateChanged(auth, async (user) => {
-            initFirebaseRefs();
             if (user) {
                 currentUser = user;
                 document.getElementById("authContainer").classList.add("hidden");
@@ -288,7 +267,6 @@
                 currentUser = null;
                 document.getElementById("authContainer").classList.remove("hidden");
                 document.getElementById("mainApp").classList.add("hidden");
-                // Clear forms
                 document.getElementById("loginEmail").value = '';
                 document.getElementById("loginPassword").value = '';
                 document.getElementById("regName").value = '';
@@ -335,9 +313,6 @@
             const password = document.getElementById("regPassword").value;
             try {
                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                // Update profile with display name
-                // Note: updateProfile requires re-authentication? Actually we can just store name in Firestore.
-                // We'll set it when first document is created.
                 await setDoc(doc(db, "users", userCred.user.uid), {
                     email: email,
                     name: name,
@@ -361,7 +336,6 @@
                 return;
             }
             await addRound(grossScore, courseRating, slopeRating, courseName);
-            // Clear inputs
             document.getElementById("courseName").value = '';
             document.getElementById("grossScore").value = '';
             document.getElementById("courseRating").value = '';
