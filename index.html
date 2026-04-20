@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>IGCQ Golf Handicap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Firebase v9 compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --g-dark: #142b1e;
+      --g-mid:  #1e4530;
+      --g-btn:  #265c3e;
+      --gold:   #c9a050;
+      --gold-l: #e6c46e;
+      --cream:  #f7f3eb;
+      --cream2: #ede7d8;
+      --white:  #ffffff;
+      --t-dark: #1a1a1a;
+      --t-mid:  #4a4a4a;
+      --t-lite: #8a8a8a;
+      --radius: 12px;
+      --nav-h:  68px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--cream);
+      color: var(--t-dark);
+      overscroll-behavior: none;
+    }
+
+    /* ── App shell ── */
+    #app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; background: var(--cream); position: relative; box-shadow: 0 0 40px rgba(0,0,0,0.15); }
+
+    /* ── Header ── */
+    .hdr { background: var(--g-dark); color: #fff; padding: 14px 18px 12px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .hdr-left { display: flex; align-items: center; gap: 10px; }
+    .hdr-logo { width: 36px; height: 36px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .hdr-title { font-family: 'Libre Baskerville', serif; font-size: 17px; color: var(--gold); letter-spacing: 0.3px; }
+    .hdr-sub { font-size: 10px; color: rgba(255,255,255,0.55); margin-top: 1px; }
+    .hdr-date { font-size: 11px; color: rgba(255,255,255,0.45); text-align: right; line-height: 1.4; }
+
+    /* ── Scroll area ── */
+    .scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--nav-h) + 16px); }
+
+    /* ── Bottom nav ── */
+    .bnav { position: absolute; bottom: 0; left: 0; right: 0; height: var(--nav-h); background: var(--g-dark); display: flex; border-top: 1px solid rgba(201,160,80,0.25); }
+    .bnav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; border: none; background: none; color: rgba(255,255,255,0.4); font-family: 'Nunito', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; transition: color 0.15s; padding-bottom: 8px; }
+    .bnav-item.active { color: var(--gold); }
+    .bnav-icon { font-size: 20px; line-height: 1; }
+
+    /* ── Section titles ── */
+    .sec-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 10px; }
+    .sec-title { font-family: 'Libre Baskerville', serif; font-size: 15px; color: var(--g-dark); }
+    .sec-count { font-size: 12px; color: var(--t-lite); }
+
+    /* ── Search / filter bar ── */
+    .filter-bar { padding: 12px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
+    .search-inp { width: 100%; padding: 10px 14px; border: 1.5px solid var(--cream2); border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; background: #fff; outline: none; color: var(--t-dark); }
+    .search-inp:focus { border-color: var(--g-btn); }
+    .filter-row { display: flex; gap: 8px; }
+    .filter-sel { flex: 1; padding: 8px 10px; border: 1.5px solid var(--cream2); border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 12px; background: #fff; outline: none; color: var(--t-dark); }
+
+    /* ── Player row (leaderboard & members) ── */
+    .p-row { background: #fff; border-radius: var(--radius); padding: 11px 14px; margin: 0 16px 8px; display: flex; align-items: center; gap: 10px; cursor: pointer; border: 1px solid rgba(0,0,0,0.06); transition: transform 0.1s; }
+    .p-row:active { transform: scale(0.985); }
+    .p-rank { font-size: 12px; color: var(--t-lite); width: 22px; text-align: center; flex-shrink: 0; }
+    .p-info { flex: 1; min-width: 0; }
+    .p-name { font-weight: 700; font-size: 14px; color: var(--t-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .p-meta { font-size: 11px; color: var(--t-lite); margin-top: 2px; }
+    .p-hc { text-align: right; flex-shrink: 0; }
+    .p-hc-val { font-size: 17px; font-weight: 700; color: var(--g-mid); font-family: 'Libre Baskerville', serif; }
+    .p-hc-lbl { font-size: 9px; color: var(--t-lite); text-transform: uppercase; letter-spacing: 0.4px; }
+    .p-caret { color: #ccc; font-size: 14px; flex-shrink: 0; }
+
+    /* Grade badge */
+    .grade { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .g-a { background: #e6f2eb; color: #1a6b3a; }
+    .g-b { background: #e6eef7; color: #1a4f8a; }
+    .g-c { background: #f7ece6; color: #8a421a; }
+
+    /* ── Profile header ── */
+    .prof-hdr { background: var(--g-dark); padding: 14px 18px 20px; color: #fff; }
+    .back-btn { background: none; border: none; color: rgba(255,255,255,0.7); font-family: 'Nunito', sans-serif; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0 0 10px; }
+    .back-btn:hover { color: #fff; }
+    .prof-name { font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); }
+    .prof-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+    .stats-row { display: flex; gap: 10px; margin-top: 14px; }
+    .stat-box { background: rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; flex: 1; text-align: center; }
+    .stat-val { font-size: 20px; font-weight: 700; color: var(--gold); font-family: 'Libre Baskerville', serif; }
+    .stat-lbl { font-size: 9px; color: rgba(255,255,255,0.6); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* ── Score table ── */
+    .tbl-wrap { overflow-x: auto; padding: 0 16px 16px; }
+    .score-tbl { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 520px; }
+    .score-tbl th { background: var(--g-dark); color: var(--gold); padding: 7px 8px; text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.4px; white-space: nowrap; }
+    .score-tbl th:first-child { border-radius: 8px 0 0 0; }
+    .score-tbl th:last-child { border-radius: 0 8px 0 0; }
+    .score-tbl td { padding: 7px 8px; text-align: center; border-bottom: 1px solid rgba(0,0,0,0.05); white-space: nowrap; }
+    .score-tbl tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+    .score-tbl .td-course { text-align: left; max-width: 130px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--t-mid); }
+    .score-tbl .td-hci { font-weight: 700; color: var(--g-mid); }
+    .score-tbl .td-diff { color: var(--g-btn); }
+
+    /* ── Form ── */
+    .form-wrap { padding: 16px; }
+    .form-card { background: #fff; border-radius: var(--radius); padding: 20px; border: 1px solid rgba(0,0,0,0.07); }
+    .form-title { font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--g-dark); margin-bottom: 18px; }
+    .form-grp { margin-bottom: 14px; }
+    .form-lbl { display: block; font-size: 11px; font-weight: 700; color: var(--t-mid); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-inp { width: 100%; padding: 11px 14px; border: 1.5px solid var(--cream2); border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 15px; color: var(--t-dark); background: var(--cream); outline: none; transition: border-color 0.2s, background 0.2s; }
+    .form-inp:focus { border-color: var(--g-btn); background: #fff; }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-grp { flex: 1; min-width: 0; }
+
+    /* Calc preview */
+    .calc-box { background: var(--cream); border: 1px solid var(--cream2); border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
+    .calc-lbl { font-size: 11px; color: var(--t-lite); margin-bottom: 4px; }
+    .calc-val { font-size: 22px; font-weight: 700; color: var(--g-dark); font-family: 'Libre Baskerville', serif; }
+    .calc-formula { font-size: 10px; color: var(--t-lite); margin-top: 4px; }
+
+    /* Buttons */
+    .btn-primary { width: 100%; padding: 14px; background: var(--g-dark); color: #fff; border: none; border-radius: 10px; font-family: 'Libre Baskerville', serif; font-size: 15px; cursor: pointer; transition: background 0.2s; margin-top: 6px; }
+    .btn-primary:hover { background: var(--g-mid); }
+    .btn-primary:disabled { background: #bbb; cursor: not-allowed; }
+    .btn-gold { background: var(--gold); color: var(--g-dark); font-weight: 700; }
+    .btn-gold:hover { background: var(--gold-l); }
+    .btn-sm { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--g-dark); color: #fff; border: none; border-radius: 8px; font-family: 'Nunito', sans-serif; font-size: 13px; cursor: pointer; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: calc(var(--nav-h) + 12px); left: 50%; transform: translateX(-50%); background: var(--g-dark); color: #fff; padding: 10px 22px; border-radius: 20px; font-size: 13px; z-index: 999; border: 1px solid var(--gold); white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+
+    /* Loading */
+    .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 10px; }
+    .loading-spin { width: 28px; height: 28px; border: 3px solid var(--cream2); border-top-color: var(--g-btn); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-txt { font-size: 13px; color: var(--t-lite); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 32px 24px; }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty-txt { font-size: 14px; color: var(--t-lite); }
+
+    /* Splash */
+    .splash { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; background: var(--g-dark); }
+    .splash-logo { width: 70px; height: 70px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; }
+    .splash-name { font-family: 'Libre Baskerville', serif; font-size: 26px; color: var(--gold); }
+    .splash-sub { font-size: 13px; color: rgba(255,255,255,0.5); }
+    .splash-dots { display: flex; gap: 6px; margin-top: 8px; }
+    .splash-dot { width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+    .splash-dot:nth-child(2) { animation-delay: 0.2s; }
+    .splash-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulse { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
+
+    /* Handicap legend */
+    .legend { display: flex; gap: 8px; padding: 0 16px 12px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t-mid); }
+
+    /* Add score action bar inside profile */
+    .action-bar { padding: 14px 16px 6px; }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--cream2); margin: 8px 16px 12px; }
+
+    /* Member admin card */
+    .admin-card { background: #fff; border-radius: var(--radius); padding: 16px; margin: 0 16px 12px; border: 1px solid rgba(0,0,0,0.07); }
+    .admin-card-title { font-size: 12px; font-weight: 700; color: var(--t-mid); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+    .admin-row { display: flex; gap: 10px; }
+
+    /* Rule info */
+    .rule-box { background: rgba(30,69,48,0.07); border-radius: 10px; padding: 12px 14px; margin: 12px 16px; }
+    .rule-box p { font-size: 11px; color: var(--g-mid); line-height: 1.6; }
+    .rule-box strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ================================================================
+   🔥 FIREBASE CONFIG  — replace with your project credentials
+   ================================================================ */
+const FB_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+/* ================================================================ */
+
+firebase.initializeApp(FB_CONFIG);
+const db = firebase.firestore();
+
+/* ── Member list (mirrors spreadsheet) ─────────────────────────── */
+const MEMBER_NAMES = [
+  'Xiao Nan','Muchsin','Dr. Badrul','Hana','Eka',
+  'Reno Suriono','Agus Islandy','Anton Hamilton','Yanto B',
+  'Chris R','Rudyanto','Donny Sofyan','Hapsara Dicky',
+  'Galih','Tim Sun','Yudi Suharto','Ben Norris',
+  'Radin Saleh','Ridwan Auladi','Rioka','Rocca',
+  'Febrianto','Justin','Yosef','Teuku Monza',
+  'Ridwan Suryadarma','Ewa Rappe','Hendar Jolendar',
+  'M Rafi','Fauzi Bachmid','Hamid Mawardi','Vino',
+  'Simon','Evandri','Kevin'
+];
+
+/* ── Yudi's 68 rounds (seed data) ──────────────────────────────── */
+const YUDI_ROUNDS_RAW = [
+  [117,71,125,'IGCQ Open 2021 Twin Waters','2021-01-10'],
+  [120,72,131,'Nudgee','2021-01-24'],
+  [109,71,124,'Keperra White (North)','2021-02-07'],
+  [115,71,112,'Meadowbrook GC','2021-02-21'],
+  [106,70,131,'McLeod CC','2021-03-07'],
+  [90,70,125,'RACV Royal Pines','2021-03-21'],
+  [106,70,122,'Windaroo Lakes GC','2021-04-04'],
+  [104,70,114,'Mt Warren Park GC','2021-04-18'],
+  [106,69,113,'Meadowbrook GC','2021-05-02'],
+  [115,70,116,'Riverlakes GC','2021-05-16'],
+  [112,70,131,'McLeod CC','2021-05-30'],
+  [112,69,112,'St Lucia GC','2021-06-13'],
+  [108,70,116,'Riverlakes GC','2021-06-27'],
+  [110,69,113,'Meadowbrook GC','2021-07-11'],
+  [109,70,131,'McLeod CC','2021-07-25'],
+  [114,70,116,'Oxley GC','2021-08-08'],
+  [97,71,129,'Keperra Blue (North)','2021-08-22'],
+  [105,71,124,'Gailes GC','2021-09-05'],
+  [111,70,116,'Oxley GC','2021-09-19'],
+  [110,70,131,'McLeod CC','2021-10-03'],
+  [116,70,117,'Redland Bay GC','2021-10-17'],
+  [109,71,129,'Keperra Blue (North)','2021-10-31'],
+  [109,70,133,'Brookwater GC (Silver)','2021-11-14'],
+  [101,70,116,'Riverlakes GC','2021-11-28'],
+  [118,70,116,'Oxley GC','2021-12-12'],
+  [108,71,129,'Keperra Blue (West)','2021-12-26'],
+  [110,70,116,'Oxley GC','2022-01-09'],
+  [107,69,119,'Wantima CC (Yellow)','2022-01-23'],
+  [100,70,116,'Riverlakes GC','2022-02-06'],
+  [98,70,116,'Riverlakes GC','2022-02-20'],
+  [118,69,112,'St Lucia GC','2022-03-06'],
+  [103,71,124,'Gailes GC','2022-03-20'],
+  [107,71,120,'Redland Bay GC (Blue)','2022-04-03'],
+  [113,70,114,'Mt Warren Park GC','2022-04-17'],
+  [99,66,108,'Redland Bay GC (White Temp)','2022-05-01'],
+  [117,70,123,'Gainsborough Greens GC','2022-05-15'],
+  [113,71,125,'The Glades GC (White)','2022-05-29'],
+  [103,70,116,'Riverlakes GC','2022-06-12'],
+  [99,66,114,'Wantima CC (Yellow Temp)','2022-06-26'],
+  [104,70,116,'Riverlakes GC','2022-07-10'],
+  [101,68,120,'Minnippi GC','2022-07-24'],
+  [104,66,114,'Wantima CC (Yellow Temp)','2022-08-07'],
+  [103,71,124,'Gailes GC (White)','2022-08-21'],
+  [101,69,116,'Carbrook (White Temp)','2022-09-04'],
+  [99,70,116,'Oxley GC (White)','2022-09-18'],
+  [117,70,123,'Palm Meadows GC (White)','2022-10-02'],
+  [115,70,122,'Windaroo Lakes GC','2022-10-16'],
+  [114,67,116,'Riverlakes GC','2022-10-30'],
+  [108,69,113,'Meadowbrook GC','2022-11-13'],
+  [107,68,112,'Redland Bay GC (White Temp)','2022-11-27'],
+  [105,70,116,'Oxley GC (White)','2022-12-11'],
+  [101,70,116,'Riverlakes GC','2022-12-25'],
+  [105,70,124,'Links Hope Island GC (White)','2023-01-08'],
+  [104,70,116,'Oxley GC (White)','2023-01-22'],
+  [104,70,123,'Gainsborough Greens GC (White)','2023-02-05'],
+  [107,70,122,'Windaroo Lakes GC','2023-02-19'],
+  [109,69,116,'Carbrook (White Temp)','2023-03-05'],
+  [110,70,131,'McLeod CC','2023-03-19'],
+  [108,70,123,'Palm Meadows GC (White)','2023-04-02'],
+  [101,70,116,'Oxley GC (White)','2023-04-16'],
+  [109,71,128,'Pacific GC (White)','2023-04-30'],
+  [106,71,113,'Nudgee GC Kurrai (Silver)','2023-05-14'],
+  [116,71,127,'Palmer Gold Coast (White)','2023-05-28'],
+  [101,71,124,'Gailes GC (White)','2023-06-11'],
+  [93,70,116,'Riverlakes GC (White)','2023-06-25'],
+  [101,66,116,'Wynnum GC (Yellow)','2023-07-09'],
+  [96,72,129,'Keperra Blue (Old)','2023-07-23'],
+  [105,72.4,119,'Meadowbrook GC','2023-08-06'],
+  [102,70,122,'Carbrook (White)','2023-08-20'],
+];
+
+/* ── Handicap engine (exactly matches Yudi tab formulas) ──────── */
+function scoreDiff(gross, cr, sr) {
+  return ((gross - cr) * 113) / sr;
+}
+
+function calcHandicap(diffs) {
+  const n = diffs.length;
+  if (n === 0) return null;
+  let v;
+  if (n <= 3) {
+    v = diffs.reduce((a,b) => a+b, 0) / n;
+  } else if (n <= 7) {
+    v = diffs.slice(-3).reduce((a,b) => a+b, 0) / 3;
+  } else if (n <= 9) {
+    const s = [...diffs.slice(-8)].sort((a,b) => a-b);
+    v = (s[0]+s[1]+s[2]) / 3;
+  } else {
+    const s = [...diffs.slice(-10)].sort((a,b) => a-b);
+    v = (s[0]+s[1]+s[2]) / 3;
+  }
+  return Math.min(36, v);
+}
+
+function grade(h) {
+  if (h <= 18) return 'A';
+  if (h <= 30) return 'B';
+  return 'C';
+}
+
+function mid(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/,'');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/* ── Seed Firestore on first run ───────────────────────────────── */
+async function seedIfEmpty() {
+  const snap = await db.collection('members').limit(1).get();
+  if (!snap.empty) return;
+
+  const batch = db.batch();
+  MEMBER_NAMES.forEach(name => {
+    const ref = db.collection('members').doc(mid(name));
+    let rounds = [];
+    if (name === 'Yudi Suharto') {
+      rounds = YUDI_ROUNDS_RAW.map(([g,cr,sr,course,date]) => ({
+        grossScore: g, courseRating: cr, slopeRating: sr, course, date,
+        scoreDiff: scoreDiff(g, cr, sr),
+        addedAt: date + 'T00:00:00.000Z'
+      }));
+    }
+    batch.set(ref, { name, rounds, createdAt: new Date().toISOString() });
+  });
+  await batch.commit();
+}
+
+/* ── Grade badge ───────────────────────────────────────────────── */
+function GradeBadge({ h }) {
+  const g = grade(h);
+  return <span className={`grade g-${g.toLowerCase()}`}>{g}</span>;
+}
+
+/* ─────────────────── DASHBOARD (LEADERBOARD) ──────────────────── */
+function Dashboard({ onPlayer }) {
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterG, setFilterG] = useState('all');
+  const [sortBy, setSortBy] = useState('handicap');
+
+  useEffect(() => {
+    const unsub = db.collection('members').onSnapshot(snap => {
+      const data = snap.docs.map(doc => {
+        const d = doc.data();
+        const diffs = (d.rounds||[]).map(r => r.scoreDiff);
+        const hc = calcHandicap(diffs);
+        return { id: doc.id, name: d.name, rounds: diffs.length, hc };
+      });
+      setRows(data);
+      setBusy(false);
+    });
+    return unsub;
+  }, []);
+
+  let list = rows.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
+  if (filterG !== 'all') list = list.filter(r => r.hc !== null && grade(r.hc) === filterG);
+  list.sort((a,b) => {
+    if (sortBy === 'handicap') return (a.hc ?? 999) - (b.hc ?? 999);
+    return a.name.localeCompare(b.name);
+  });
+
+  if (busy) return <div className="loading"><div className="loading-spin"/><div className="loading-txt">Loading leaderboard…</div></div>;
+
+  return (
+    <div>
+      <div className="filter-bar">
+        <input className="search-inp" placeholder="🔍  Search member…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div className="filter-row">
+          <select className="filter-sel" value={filterG} onChange={e=>setFilterG(e.target.value)}>
+            <option value="all">All grades</option>
+            <option value="A">Grade A · 1–18</option>
+            <option value="B">Grade B · 19–30</option>
+            <option value="C">Grade C · 31–36</option>
+          </select>
+          <select className="filter-sel" value={sortBy} onChange={e=>setSortBy(e.target.value)}>
+            <option value="handicap">↕ Handicap</option>
+            <option value="name">↕ Name A–Z</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="legend">
+        <span className="legend-item"><span className="grade g-a">A</span> 1–18</span>
+        <span className="legend-item"><span className="grade g-b">B</span> 19–30</span>
+        <span className="legend-item"><span className="grade g-c">C</span> 31–36</span>
+      </div>
+
+      <div className="sec-hdr">
+        <span className="sec-title">Members</span>
+        <span className="sec-count">{list.length} of {rows.length}</span>
+      </div>
+
+      {list.map((r, i) => (
+        <div key={r.id} className="p-row" onClick={() => onPlayer(r.id, r.name)}>
+          <span className="p-rank">{i+1}</span>
+          <div className="p-info">
+            <div className="p-name">{r.name}</div>
+            <div className="p-meta">{r.rounds} round{r.rounds!==1?'s':''} played</div>
+          </div>
+          {r.hc !== null
+            ? <>
+                <div className="p-hc">
+                  <div className="p-hc-val">{r.hc.toFixed(2)}</div>
+                  <div className="p-hc-lbl">HCI</div>
+                </div>
+                <GradeBadge h={r.hc}/>
+              </>
+            : <span style={{fontSize:12,color:'#bbb'}}>No rounds</span>
+          }
+          <span className="p-caret">›</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────── PLAYER PROFILE ───────────────────────────── */
+function Profile({ pid, pname, onBack, onAddScore }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(true);
+
+  useEffect(() => {
+    const unsub = db.collection('members').doc(pid).onSnapshot(doc => {
+      if (doc.exists) {
+        const d = doc.data();
+        const rounds = d.rounds || [];
+        const diffs = rounds.map(r => r.scoreDiff);
+        const hc = calcHandicap(diffs);
+        setData({ name: d.name, rounds, hc });
+      }
+      setBusy(false);
+    });
+    return unsub;
+  }, [pid]);
+
+  if (busy) return <div className="loading"><div className="loading-spin"/><div className="loading-txt">Loading profile…</div></div>;
+  if (!data) return <div className="loading"><div className="empty-txt">Member not found.</div></div>;
+
+  const { name, rounds, hc } = data;
+  const g = hc !== null ? grade(hc) : '—';
+
+  const roundsWithHC = rounds.map((r, i) => {
+    const diffs = rounds.slice(0, i+1).map(x => x.scoreDiff);
+    return { ...r, hci: calcHandicap(diffs) };
+  });
+
+  const best = rounds.length ? Math.min(...rounds.map(r=>r.scoreDiff)).toFixed(2) : '—';
+  const avg  = rounds.length ? (rounds.reduce((a,r)=>a+r.scoreDiff,0)/rounds.length).toFixed(2) : '—';
+
+  return (
+    <div>
+      <div className="prof-hdr">
+        <button className="back-btn" onClick={onBack}>‹  Back</button>
+        <div className="prof-name">{name}</div>
+        <div className="prof-sub">Grade {g} &nbsp;·&nbsp; {rounds.length} rounds played</div>
+        <div className="stats-row">
+          <div className="stat-box">
+            <div className="stat-val">{hc !== null ? hc.toFixed(2) : '—'}</div>
+            <div className="stat-lbl">Current HCI</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-val">{g}</div>
+            <div className="stat-lbl">Grade</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-val">{best}</div>
+            <div className="stat-lbl">Best Diff</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-val">{avg}</div>
+            <div className="stat-lbl">Avg Diff</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="action-bar">
+        <button className="btn-primary btn-gold" onClick={onAddScore}>
+          + &nbsp;Add New Round
+        </button>
+      </div>
+
+      <div className="rule-box">
+        <p><strong>HCI Rule:</strong> Rounds 1–3: avg all · Rounds 4–7: avg last 3 · Rounds 8–9: best 3 of last 8 · Round 10+: best 3 of last 10 · Max 36</p>
+      </div>
+
+      <div className="sec-hdr">
+        <span className="sec-title">Score History</span>
+        <span className="sec-count">{rounds.length} rounds</span>
+      </div>
+
+      {rounds.length === 0
+        ? <div className="empty"><div className="empty-icon">⛳</div><div className="empty-txt">No scores recorded yet.<br/>Add the first round above.</div></div>
+        : <div className="tbl-wrap">
+            <table className="score-tbl">
+              <thead>
+                <tr>
+                  <th>#</th><th>Date</th><th>Score</th><th>CR</th><th>SR</th>
+                  <th>Diff</th><th>HCI</th><th>Course</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...roundsWithHC].reverse().map((r, ri) => {
+                  const num = roundsWithHC.length - ri;
+                  return (
+                    <tr key={ri}>
+                      <td style={{color:'var(--t-lite)'}}>{num}</td>
+                      <td>{fmtDate(r.date)}</td>
+                      <td style={{fontWeight:700}}>{r.grossScore}</td>
+                      <td>{r.courseRating}</td>
+                      <td>{r.slopeRating}</td>
+                      <td className="td-diff">{r.scoreDiff.toFixed(2)}</td>
+                      <td className="td-hci">{r.hci !== null ? r.hci.toFixed(2) : '—'}</td>
+                      <td className="td-course">{r.course || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+      }
+    </div>
+  );
+}
+
+/* ─────────────────── ADD SCORE FORM ───────────────────────────── */
+function AddScore({ preId, preName, onBack, onSaved }) {
+  const [members, setMembers] = useState([]);
+  const [selId, setSelId]     = useState(preId || '');
+  const [gross, setGross]     = useState('');
+  const [cr, setCr]           = useState('');
+  const [sr, setSr]           = useState('');
+  const [course, setCourse]   = useState('');
+  const [date, setDate]       = useState(today());
+  const [saving, setSaving]   = useState(false);
+
+  useEffect(() => {
+    db.collection('members').get().then(snap => {
+      const list = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
+      list.sort((a,b) => a.name.localeCompare(b.name));
+      setMembers(list);
+    });
+  }, []);
+
+  const diff = gross && cr && sr
+    ? scoreDiff(parseFloat(gross), parseFloat(cr), parseFloat(sr))
+    : null;
+
+  async function save() {
+    if (!selId || !gross || !cr || !sr) return;
+    setSaving(true);
+    const sd = scoreDiff(parseFloat(gross), parseFloat(cr), parseFloat(sr));
+    const round = {
+      grossScore: parseFloat(gross), courseRating: parseFloat(cr),
+      slopeRating: parseFloat(sr), scoreDiff: sd,
+      course: course.trim() || 'Unknown Course',
+      date, addedAt: new Date().toISOString()
+    };
+    await db.collection('members').doc(selId).update({
+      rounds: firebase.firestore.FieldValue.arrayUnion(round)
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  const valid = selId && gross && cr && sr;
+
+  return (
+    <div className="form-wrap">
+      {onBack &&
+        <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--g-btn)',fontSize:14,padding:'0 0 10px',display:'flex',alignItems:'center',gap:4,fontFamily:'Nunito,sans-serif'}} onClick={onBack}>
+          ‹  Back
+        </button>
+      }
+
+      <div className="form-card">
+        <div className="form-title">Record a Round</div>
+
+        <div className="form-grp">
+          <label className="form-lbl">Member</label>
+          <select className="form-inp" value={selId} onChange={e=>setSelId(e.target.value)}>
+            <option value="">Select member…</option>
+            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
+
+        <div className="form-grp">
+          <label className="form-lbl">Date Played</label>
+          <input type="date" className="form-inp" value={date} onChange={e=>setDate(e.target.value)}/>
+        </div>
+
+        <div className="form-grp">
+          <label className="form-lbl">Gross Score</label>
+          <input type="number" inputMode="numeric" className="form-inp" placeholder="e.g. 95"
+            value={gross} onChange={e=>setGross(e.target.value)}/>
+        </div>
+
+        <div className="form-row">
+          <div className="form-grp">
+            <label className="form-lbl">Course Rating (CR)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="form-inp" placeholder="e.g. 70.4"
+              value={cr} onChange={e=>setCr(e.target.value)}/>
+          </div>
+          <div className="form-grp">
+            <label className="form-lbl">Slope Rating (SR)</label>
+            <input type="number" inputMode="numeric" className="form-inp" placeholder="e.g. 125"
+              value={sr} onChange={e=>setSr(e.target.value)}/>
+          </div>
+        </div>
+
+        <div className="form-grp">
+          <label className="form-lbl">Course Name</label>
+          <input type="text" className="form-inp" placeholder="e.g. Meadowbrook GC"
+            value={course} onChange={e=>setCourse(e.target.value)}/>
+        </div>
+
+        {diff !== null &&
+          <div className="calc-box">
+            <div className="calc-lbl">Calculated Score Differential</div>
+            <div className="calc-val">{diff.toFixed(4)}</div>
+            <div className="calc-formula">= (({gross} − {cr}) × 113) ÷ {sr}</div>
+          </div>
+        }
+
+        <button className="btn-primary" onClick={save} disabled={!valid || saving}>
+          {saving ? 'Saving…' : 'Save Round'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── MEMBERS TAB ──────────────────────────────── */
+function Members({ onPlayer }) {
+  const [all, setAll]       = useState([]);
+  const [busy, setBusy]     = useState(true);
+  const [search, setSearch] = useState('');
+  const [newName, setNewName] = useState('');
+  const [adding, setAdding]   = useState(false);
+
+  useEffect(() => {
+    const unsub = db.collection('members').onSnapshot(snap => {
+      const list = snap.docs.map(d => ({ id: d.id, name: d.data().name, rounds: (d.data().rounds||[]).length }));
+      list.sort((a,b) => a.name.localeCompare(b.name));
+      setAll(list);
+      setBusy(false);
+    });
+    return unsub;
+  }, []);
+
+  async function addMember() {
+    const n = newName.trim();
+    if (!n) return;
+    setAdding(true);
+    const id = mid(n);
+    await db.collection('members').doc(id).set({ name: n, rounds: [], createdAt: new Date().toISOString() });
+    setNewName('');
+    setAdding(false);
+  }
+
+  const filtered = all.filter(m => m.name.toLowerCase().includes(search.toLowerCase()));
+
+  if (busy) return <div className="loading"><div className="loading-spin"/><div className="loading-txt">Loading…</div></div>;
+
+  return (
+    <div>
+      <div className="filter-bar">
+        <input className="search-inp" placeholder="🔍  Search member…" value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+
+      <div className="admin-card">
+        <div className="admin-card-title">Add New Member</div>
+        <div className="admin-row">
+          <input className="form-inp" style={{flex:1}} placeholder="Full name" value={newName} onChange={e=>setNewName(e.target.value)}
+            onKeyDown={e => e.key==='Enter' && addMember()}/>
+          <button className="btn-primary" style={{width:'auto',padding:'11px 18px',marginTop:0}} onClick={addMember} disabled={!newName.trim()||adding}>
+            {adding ? '…' : 'Add'}
+          </button>
+        </div>
+      </div>
+
+      <div className="sec-hdr">
+        <span className="sec-title">All Members</span>
+        <span className="sec-count">{filtered.length}</span>
+      </div>
+
+      {filtered.map(m => (
+        <div key={m.id} className="p-row" onClick={() => onPlayer(m.id, m.name)}>
+          <div className="p-info">
+            <div className="p-name">{m.name}</div>
+            <div className="p-meta">{m.rounds} round{m.rounds!==1?'s':''} recorded</div>
+          </div>
+          <span className="p-caret">›</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────── ROOT APP ─────────────────────────────────── */
+function App() {
+  const [ready, setReady]       = useState(false);
+  const [tab, setTab]           = useState('dashboard');
+  const [view, setView]         = useState('dashboard'); // dashboard | profile | addScore | members
+  const [player, setPlayer]     = useState(null);       // { id, name }
+  const [toast, setToast]       = useState('');
+
+  useEffect(() => {
+    seedIfEmpty().then(() => setReady(true)).catch(() => setReady(true));
+  }, []);
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2800);
+  }
+
+  function goPlayer(id, name) {
+    setPlayer({ id, name });
+    setView('profile');
+  }
+
+  function goAddScore(fromProfile) {
+    setView('addScore');
+  }
+
+  function onScoreSaved() {
+    showToast('✓  Round saved successfully!');
+    setView(player ? 'profile' : 'dashboard');
+  }
+
+  function changeTab(t) {
+    setTab(t);
+    if (t === 'dashboard') { setView('dashboard'); setPlayer(null); }
+    else if (t === 'addScore') { setView('addScore'); }
+    else if (t === 'members') { setView('members'); }
+  }
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+
+  if (!ready) return (
+    <div id="app">
+      <div className="splash">
+        <div className="splash-logo">⛳</div>
+        <div className="splash-name">IGCQ Golf</div>
+        <div className="splash-sub">Handicap Management System</div>
+        <div className="splash-dots">
+          <div className="splash-dot"/><div className="splash-dot"/><div className="splash-dot"/>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div id="app">
+      <div className="hdr">
+        <div className="hdr-left">
+          <div className="hdr-logo">⛳</div>
+          <div>
+            <div className="hdr-title">IGCQ Golf</div>
+            <div className="hdr-sub">Handicap Management System</div>
+          </div>
+        </div>
+        <div className="hdr-date">{dateStr}<br/>WHS System</div>
+      </div>
+
+      <div className="scroll">
+        {view === 'dashboard' && <Dashboard onPlayer={goPlayer}/>}
+        {view === 'profile' && player &&
+          <Profile pid={player.id} pname={player.name} onBack={() => { setView('dashboard'); setTab('dashboard'); }} onAddScore={() => goAddScore(true)}/>
+        }
+        {view === 'addScore' &&
+          <AddScore preId={player?.id} preName={player?.name}
+            onBack={() => setView(player ? 'profile' : 'dashboard')}
+            onSaved={onScoreSaved}/>
+        }
+        {view === 'members' && <Members onPlayer={goPlayer}/>}
+      </div>
+
+      <div className="bnav">
+        <button className={`bnav-item ${tab==='dashboard'?'active':''}`} onClick={() => changeTab('dashboard')}>
+          <span className="bnav-icon">🏆</span>Leaderboard
+        </button>
+        <button className={`bnav-item ${tab==='addScore'?'active':''}`} onClick={() => changeTab('addScore')}>
+          <span className="bnav-icon">＋</span>Add Round
+        </button>
+        <button className={`bnav-item ${tab==='members'?'active':''}`} onClick={() => changeTab('members')}>
+          <span className="bnav-icon">👥</span>Members
+        </button>
+      </div>
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+</script>
+</body>
+</html>
