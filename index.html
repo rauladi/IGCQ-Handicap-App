@@ -80,14 +80,34 @@
             <div class="container mx-auto p-4 max-w-6xl">
                 <!-- Header with tabs -->
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">⛳ IGCQ Handicap Tracker</h1>
-                    <div class="flex gap-4">
-                        <button id="playerTabBtn" class="admin-tab text-gray-600 font-semibold pb-1">My Dashboard</button>
-                        <button id="adminTabBtn" class="admin-tab text-gray-600 font-semibold pb-1 hidden">Admin Panel</button>
-                        <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
-                    </div>
-                </div>
+    <!-- Logo + Title -->
+    <div class="flex items-center gap-3">
+        <div class="relative">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="24" cy="24" r="22" fill="#1a5f3a" stroke="#c8a24a" stroke-width="2"/>
+                <!-- Golf flag -->
+                <path d="M14 18 L24 12 L34 18 L34 30 L24 36 L14 30 Z" fill="none" stroke="#f5e6b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Hole/cup -->
+                <circle cx="24" cy="24" r="4" fill="#f5e6b8"/>
+                <!-- Scorecard lines -->
+                <path d="M18 28 L20 30 L28 22" stroke="#f5e6b8" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <!-- Handicap 'H' subtle -->
+                <text x="24" y="42" text-anchor="middle" fill="#c8a24a" font-size="8" font-weight="bold" font-family="sans-serif">HCP</text>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">IGCQ <span class="text-green-700">Handicap</span></h1>
+            <p class="text-xs text-gray-500 -mt-1">Golf Club Tracker</p>
+        </div>
+    </div>
 
+    <!-- Navigation buttons -->
+    <div class="flex gap-4">
+        <button id="playerTabBtn" class="admin-tab text-gray-600 font-semibold pb-1">My Dashboard</button>
+        <button id="adminTabBtn" class="admin-tab text-gray-600 font-semibold pb-1 hidden">Admin Panel</button>
+        <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
+    </div>
+</div>
                 <!-- Player Dashboard -->
                 <div id="playerDashboard">
                     <!-- Add Round Form -->
