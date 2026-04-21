@@ -4,30 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>IGCQ Golf Handicap Tracker</title>
-    <!-- Tailwind CSS CDN (ok for development) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf for export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Firebase SDK -->
     <script type="module">
-        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // Your Firebase configuration (REPLACE with your own!)
+        // Your Firebase configuration (replace with your actual config)
         const firebaseConfig = {
-            apiKey: "AIzaSyBHiiwUKMHxYsdAf6Nd8KP-Amw9941Hmqo",
-  authDomain: "igcq-golf-handicap-v2.firebaseapp.com",
-  projectId: "igcq-golf-handicap-v2",
-  storageBucket: "igcq-golf-handicap-v2.firebasestorage.app",
-  messagingSenderId: "645272772081",
-  appId: "1:645272772081:web:a9800b65e4e78415a5b850"
-};
-        // Initialize Firebase
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Expose everything to global (for use in non-module script below)
         window.db = db;
         window.auth = auth;
         window.setDoc = setDoc;
@@ -38,6 +37,7 @@
         window.collection = collection;
         window.query = query;
         window.where = where;
+        window.deleteDoc = deleteDoc;
         window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
         window.signInWithEmailAndPassword = signInWithEmailAndPassword;
         window.onAuthStateChanged = onAuthStateChanged;
@@ -47,6 +47,8 @@
         .overflow-x-auto::-webkit-scrollbar { height: 6px; }
         .overflow-x-auto::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
         .overflow-x-auto::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        .admin-tab { cursor: pointer; }
+        .admin-tab.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -76,53 +78,89 @@
         <!-- Main App -->
         <div id="mainApp" class="hidden">
             <div class="container mx-auto p-4 max-w-6xl">
+                <!-- Header with tabs -->
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">⛳ IGCQ Handicap Tracker</h1>
-                    <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
-                </div>
-
-                <!-- Add Round Form -->
-                <div class="bg-white rounded-lg shadow p-5 mb-6">
-                    <h2 class="text-xl font-semibold mb-3">Add New Round</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <input type="text" id="courseName" placeholder="Course Name" class="border p-2 rounded">
-                        <input type="number" id="grossScore" placeholder="Gross Score" class="border p-2 rounded" step="1">
-                        <input type="number" id="courseRating" placeholder="Course Rating" class="border p-2 rounded" step="0.1">
-                        <input type="number" id="slopeRating" placeholder="Slope Rating" class="border p-2 rounded" step="1">
-                    </div>
-                    <button id="submitRoundBtn" class="mt-4 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 w-full sm:w-auto">Submit Round</button>
-                </div>
-
-                <!-- Handicap Card -->
-                <div class="bg-green-100 rounded-lg shadow p-4 mb-6 text-center">
-                    <h2 class="text-lg font-semibold">Your Handicap Index</h2>
-                    <p id="handicapValue" class="text-4xl font-bold text-green-700">36.0</p>
-                    <p class="text-sm text-gray-600">Based on average of last 3 rounds (max 36)</p>
-                </div>
-
-                <!-- Recent Rounds -->
-                <div class="bg-white rounded-lg shadow p-5 mb-6">
-                    <h2 class="text-xl font-semibold mb-3">Your Recent Rounds</h2>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full bg-white">
-                            <thead class="bg-gray-200">
-                                <tr><th class="py-2 px-3 text-left">Date</th><th class="py-2 px-3 text-left">Course</th><th class="py-2 px-3 text-left">Gross</th><th class="py-2 px-3 text-left">Differential</th></tr>
-                            </thead>
-                            <tbody id="roundsTableBody"><tr><td colspan="4" class="text-center py-4">Loading...</td></tr></tbody>
-                        </table>
+                    <div class="flex gap-4">
+                        <button id="playerTabBtn" class="admin-tab text-gray-600 font-semibold pb-1">My Dashboard</button>
+                        <button id="adminTabBtn" class="admin-tab text-gray-600 font-semibold pb-1 hidden">Admin Panel</button>
+                        <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
                     </div>
                 </div>
 
-                <!-- Club Summary -->
-                <div class="bg-white rounded-lg shadow p-5">
-                    <h2 class="text-xl font-semibold mb-3">Club Handicap Summary</h2>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full bg-white">
-                            <thead class="bg-gray-200">
-                                <tr><th class="py-2 px-3 text-left">Player</th><th class="py-2 px-3 text-left">Rounds</th><th class="py-2 px-3 text-left">Handicap</th><th class="py-2 px-3 text-left">Grade</th></tr>
-                            </thead>
-                            <tbody id="summaryTableBody"><tr><td colspan="4" class="text-center py-4">Loading...</td></tr></tbody>
-                        </table>
+                <!-- Player Dashboard -->
+                <div id="playerDashboard">
+                    <!-- Add Round Form -->
+                    <div class="bg-white rounded-lg shadow p-5 mb-6">
+                        <h2 class="text-xl font-semibold mb-3">Add New Round</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <input type="text" id="courseName" placeholder="Course Name" class="border p-2 rounded">
+                            <input type="number" id="grossScore" placeholder="Gross Score" class="border p-2 rounded" step="1">
+                            <input type="number" id="courseRating" placeholder="Course Rating" class="border p-2 rounded" step="0.1">
+                            <input type="number" id="slopeRating" placeholder="Slope Rating" class="border p-2 rounded" step="1">
+                        </div>
+                        <button id="submitRoundBtn" class="mt-4 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 w-full sm:w-auto">Submit Round</button>
+                    </div>
+
+                    <!-- Handicap Card -->
+                    <div class="bg-green-100 rounded-lg shadow p-4 mb-6 text-center">
+                        <h2 class="text-lg font-semibold">Your Handicap Index</h2>
+                        <p id="handicapValue" class="text-4xl font-bold text-green-700">36.0</p>
+                        <p class="text-sm text-gray-600">Calculated per IGCQ rules</p>
+                    </div>
+
+                    <!-- Recent Rounds -->
+                    <div class="bg-white rounded-lg shadow p-5 mb-6">
+                        <h2 class="text-xl font-semibold mb-3">Your Recent Rounds</h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white">
+                                <thead class="bg-gray-200">
+                                    <tr><th class="py-2 px-3 text-left">Date</th><th class="py-2 px-3 text-left">Course</th><th class="py-2 px-3 text-left">Gross</th><th class="py-2 px-3 text-left">Differential</th></tr>
+                                </thead>
+                                <tbody id="roundsTableBody"><tr><td colspan="4" class="text-center py-4">Loading......</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Club Summary (visible to all) -->
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <h2 class="text-xl font-semibold mb-3">Club Handicap Summary</h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white">
+                                <thead class="bg-gray-200">
+                                    <tr><th class="py-2 px-3 text-left">Player</th><th class="py-2 px-3 text-left">Rounds</th><th class="py-2 px-3 text-left">Handicap</th><th class="py-2 px-3 text-left">Grade</th></tr>
+                                </thead>
+                                <tbody id="summaryTableBody"><tr><td colspan="4" class="text-center py-4">Loading......</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Panel (hidden by default) -->
+                <div id="adminPanel" class="hidden">
+                    <div class="bg-white rounded-lg shadow p-5 mb-6">
+                        <h2 class="text-xl font-semibold mb-3">Bulk Upload Rounds (CSV)</h2>
+                        <p class="text-sm text-gray-600 mb-3">Format: PlayerName, GrossScore, CourseRating, SlopeRating, CourseName, Date (YYYY-MM-DD)</p>
+                        <input type="file" id="csvFile" accept=".csv" class="border p-2 rounded mb-3">
+                        <button id="uploadCsvBtn" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Upload & Process</button>
+                        <div id="uploadStatus" class="mt-3 text-sm"></div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-5">
+                        <div class="flex justify-between items-center mb-3">
+                            <h2 class="text-xl font-semibold">Full Club Summary (Admin)</h2>
+                            <button id="exportPdfBtn" class="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">Export to PDF</button>
+                        </div>
+                        <div id="exportContent">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white" id="adminSummaryTable">
+                                    <thead class="bg-gray-200">
+                                        <tr><th class="py-2 px-3 text-left">Player</th><th class="py-2 px-3 text-left">Email</th><th class="py-2 px-3 text-left">Total Rounds</th><th class="py-2 px-3 text-left">Handicap</th><th class="py-2 px-3 text-left">Grade</th><th class="py-2 px-3 text-left">Admin</th></tr>
+                                    </thead>
+                                    <tbody id="adminSummaryBody"><tr><td colspan="6" class="text-center py-4">Loading......</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -130,10 +168,12 @@
     </div>
 
     <script type="module">
-        // Wait for Firebase globals
-        let db, auth, setDoc, getDoc, getDocs, updateDoc, doc, collection, query, where;
+        // Globals
+        let db, auth, setDoc, getDoc, getDocs, updateDoc, doc, collection, query, where, deleteDoc;
         let createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut;
         let currentUser = null;
+        let currentUserData = null;
+        let isAdmin = false;
 
         function init() {
             db = window.db;
@@ -146,6 +186,7 @@
             collection = window.collection;
             query = window.query;
             where = window.where;
+            deleteDoc = window.deleteDoc;
             createUserWithEmailAndPassword = window.createUserWithEmailAndPassword;
             signInWithEmailAndPassword = window.signInWithEmailAndPassword;
             onAuthStateChanged = window.onAuthStateChanged;
@@ -153,48 +194,74 @@
         }
         init();
 
+        // ---------- Handicap Calculation Logic ----------
         function calculateHandicap(rounds) {
             if (!rounds || rounds.length === 0) return 36;
-            const sorted = [...rounds].sort((a,b) => new Date(b.date) - new Date(a.date));
-            const lastThree = sorted.slice(0, 3);
-            const avg = lastThree.reduce((sum, r) => sum + r.differential, 0) / lastThree.length;
+            // Sort by date (oldest first for consistent slicing)
+            const sorted = [...rounds].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const count = sorted.length;
+            let diffs = [];
+
+            if (count < 3) {
+                // Average of all rounds
+                diffs = sorted.map(r => r.differential);
+            } 
+            else if (count >= 3 && count <= 7) {
+                // Average of last 3 rounds
+                diffs = sorted.slice(-3).map(r => r.differential);
+            }
+            else if (count === 8 || count === 9) {
+                // Best 3 of last 8 rounds
+                const last8 = sorted.slice(-8);
+                diffs = last8.map(r => r.differential).sort((a, b) => a - b).slice(0, 3);
+            }
+            else if (count >= 10) {
+                // Best 3 of last 10 rounds
+                const last10 = sorted.slice(-10);
+                diffs = last10.map(r => r.differential).sort((a, b) => a - b).slice(0, 3);
+            }
+
+            if (diffs.length === 0) return 36;
+            const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length;
             return Math.min(avg, 36);
         }
 
-        async function addRound(gross, courseRating, slope, courseName) {
-            if (!currentUser) return;
-            const diff = ((gross - courseRating) * 113) / slope;
-            const roundedDiff = Math.round(diff * 10) / 10;
-            const newRound = {
-                date: new Date().toISOString(),
-                grossScore: gross,
-                courseRating: parseFloat(courseRating),
-                slopeRating: parseInt(slope),
-                courseName: courseName,
-                differential: roundedDiff
-            };
-            const userRef = doc(db, "users", currentUser.uid);
+        // ---------- Helper to update user handicap ----------
+        async function updateUserHandicap(userId) {
+            const userRef = doc(db, "users", userId);
             const userSnap = await getDoc(userRef);
-            let rounds = userSnap.exists() ? (userSnap.data().rounds || []) : [];
-            rounds.push(newRound);
+            if (!userSnap.exists()) return;
+            const userData = userSnap.data();
+            const rounds = userData.rounds || [];
             const newHandicap = calculateHandicap(rounds);
-            await setDoc(userRef, {
-                email: currentUser.email,
-                name: currentUser.displayName || currentUser.email.split('@')[0],
-                rounds: rounds,
-                handicap: newHandicap
-            }, { merge: true });
-            return { rounds, handicap: newHandicap };
+            await updateDoc(userRef, { handicap: newHandicap });
+            return newHandicap;
         }
 
+        // ---------- Add round to a user (used by both individual and bulk) ----------
+        async function addRoundToUser(userId, roundData, updateHandicap = true) {
+            const userRef = doc(db, "users", userId);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) return false;
+            const userData = userSnap.data();
+            const rounds = userData.rounds || [];
+            rounds.push(roundData);
+            await updateDoc(userRef, { rounds: rounds });
+            if (updateHandicap) {
+                await updateUserHandicap(userId);
+            }
+            return true;
+        }
+
+        // ---------- Load current user data ----------
         async function loadUserData() {
             if (!currentUser) return;
             const userRef = doc(db, "users", currentUser.uid);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
-                const data = userSnap.data();
-                const rounds = data.rounds || [];
-                const handicap = data.handicap || 36;
+                currentUserData = userSnap.data();
+                const rounds = currentUserData.rounds || [];
+                const handicap = currentUserData.handicap !== undefined ? currentUserData.handicap : 36;
                 document.getElementById("handicapValue").innerText = handicap.toFixed(1);
                 const tbody = document.getElementById("roundsTableBody");
                 if (rounds.length === 0) {
@@ -211,17 +278,23 @@
                     `).join('');
                 }
             } else {
-                document.getElementById("handicapValue").innerText = "36.0";
-                document.getElementById("roundsTableBody").innerHTML = '<tr><td colspan="4" class="text-center py-4">No rounds yet</td></tr>';
+                // New user – create document
                 await setDoc(doc(db, "users", currentUser.uid), {
                     email: currentUser.email,
                     name: currentUser.displayName || currentUser.email.split('@')[0],
                     rounds: [],
-                    handicap: 36
+                    handicap: 36,
+                    isAdmin: false
                 });
+                currentUserData = { rounds: [], handicap: 36, isAdmin: false };
+                document.getElementById("handicapValue").innerText = "36.0";
+                document.getElementById("roundsTableBody").innerHTML = '<tr><td colspan="4" class="text-center py-4">No rounds yet</td></tr>';
             }
+            isAdmin = currentUserData.isAdmin === true;
+            toggleAdminUI();
         }
 
+        // ---------- Load club summary (for all users) ----------
         async function loadClubSummary() {
             const querySnapshot = await getDocs(collection(db, "users"));
             const users = [];
@@ -231,18 +304,22 @@
                 const handicap = data.handicap !== undefined ? data.handicap : 36;
                 let grade = handicap <= 18 ? 'A' : (handicap <= 30 ? 'B' : 'C');
                 users.push({
+                    id: docSnap.id,
                     name: data.name || data.email.split('@')[0],
+                    email: data.email,
                     rounds: roundsCount,
                     handicap: handicap.toFixed(1),
-                    grade: grade
+                    grade: grade,
+                    isAdmin: data.isAdmin || false
                 });
             });
             users.sort((a,b) => a.name.localeCompare(b.name));
-            const tbody = document.getElementById("summaryTableBody");
+            // Update player summary table (visible to all)
+            const playerTbody = document.getElementById("summaryTableBody");
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4">No members yet</td></tr>';
+                playerTbody.innerHTML = '<tr><td colspan="4" class="text-center py-4">No members yet</td></tr>';
             } else {
-                tbody.innerHTML = users.map(u => `
+                playerTbody.innerHTML = users.map(u => `
                     <tr class="border-b">
                         <td class="py-2 px-3">${u.name}</td>
                         <td class="py-2 px-3">${u.rounds}</td>
@@ -251,9 +328,115 @@
                     </tr>
                 `).join('');
             }
+
+            // Update admin summary table (if admin)
+            const adminTbody = document.getElementById("adminSummaryBody");
+            if (adminTbody) {
+                adminTbody.innerHTML = users.map(u => `
+                    <tr class="border-b">
+                        <td class="py-2 px-3">${u.name}</td>
+                        <td class="py-2 px-3">${u.email}</td>
+                        <td class="py-2 px-3">${u.rounds}</td>
+                        <td class="py-2 px-3">${u.handicap}</td>
+                        <td class="py-2 px-3">${u.grade}</td>
+                        <td class="py-2 px-3">${u.isAdmin ? '✅' : '❌'}</td>
+                    </tr>
+                `).join('');
+            }
         }
 
-        // Auth state observer
+        // ---------- Toggle Admin UI elements ----------
+        function toggleAdminUI() {
+            const adminTabBtn = document.getElementById("adminTabBtn");
+            if (isAdmin) {
+                adminTabBtn.classList.remove("hidden");
+            } else {
+                adminTabBtn.classList.add("hidden");
+                // If admin panel is visible, switch back to player dashboard
+                document.getElementById("adminPanel").classList.add("hidden");
+                document.getElementById("playerDashboard").classList.remove("hidden");
+                // Update active tab style
+                document.getElementById("playerTabBtn").classList.add("active");
+                document.getElementById("adminTabBtn").classList.remove("active");
+            }
+        }
+
+        // ---------- Bulk Upload CSV ----------
+        function parseCSV(csvText) {
+            const lines = csvText.split(/\r?\n/);
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const required = ['playername', 'grossscore', 'courserating', 'sloperating', 'coursename'];
+            const missing = required.filter(r => !headers.includes(r));
+            if (missing.length) throw new Error(`Missing columns: ${missing.join(', ')}`);
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const values = lines[i].split(',').map(v => v.trim());
+                const row = {};
+                headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+                rows.push(row);
+            }
+            return rows;
+        }
+
+        async function processBulkUpload(rows) {
+            const statusDiv = document.getElementById("uploadStatus");
+            statusDiv.innerHTML = "Processing...";
+            let success = 0, failed = 0;
+            for (const row of rows) {
+                try {
+                    const playerName = row.playername;
+                    const gross = parseFloat(row.grossscore);
+                    const courseRating = parseFloat(row.courserating);
+                    const slope = parseFloat(row.sloperating);
+                    const courseName = row.coursename;
+                    const dateStr = row.date || new Date().toISOString().split('T')[0];
+                    if (isNaN(gross) || isNaN(courseRating) || isNaN(slope)) throw new Error("Invalid numbers");
+
+                    // Find user by name (case-insensitive)
+                    const usersQuery = query(collection(db, "users"), where("name", "==", playerName));
+                    const querySnap = await getDocs(usersQuery);
+                    if (querySnap.empty) {
+                        // Try matching by email prefix? For now, skip.
+                        throw new Error(`Player "${playerName}" not found`);
+                    }
+                    const userId = querySnap.docs[0].id;
+                    const diff = ((gross - courseRating) * 113) / slope;
+                    const roundedDiff = Math.round(diff * 10) / 10;
+                    const roundData = {
+                        date: new Date(dateStr).toISOString(),
+                        grossScore: gross,
+                        courseRating: courseRating,
+                        slopeRating: slope,
+                        courseName: courseName,
+                        differential: roundedDiff
+                    };
+                    await addRoundToUser(userId, roundData, true);
+                    success++;
+                } catch (err) {
+                    console.error(err);
+                    failed++;
+                }
+            }
+            statusDiv.innerHTML = `Upload complete: ${success} added, ${failed} failed.`;
+            await loadClubSummary();
+            if (currentUser) await loadUserData();
+        }
+
+        // ---------- Export to PDF ----------
+        function exportToPDF() {
+            const element = document.getElementById("exportContent");
+            const opt = {
+                margin: [0.5, 0.5, 0.5, 0.5],
+                filename: `IGCQ_Handicap_Summary_${new Date().toISOString().slice(0,10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, letterRendering: true },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        // ---------- Auth State ----------
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
@@ -274,7 +457,24 @@
             }
         });
 
+        // ---------- Event Listeners ----------
         // Tab switching
+        document.getElementById("playerTabBtn").addEventListener("click", () => {
+            document.getElementById("playerDashboard").classList.remove("hidden");
+            document.getElementById("adminPanel").classList.add("hidden");
+            document.getElementById("playerTabBtn").classList.add("active");
+            document.getElementById("adminTabBtn").classList.remove("active");
+        });
+        document.getElementById("adminTabBtn").addEventListener("click", () => {
+            if (!isAdmin) return;
+            document.getElementById("playerDashboard").classList.add("hidden");
+            document.getElementById("adminPanel").classList.remove("hidden");
+            document.getElementById("adminTabBtn").classList.add("active");
+            document.getElementById("playerTabBtn").classList.remove("active");
+            loadClubSummary(); // refresh
+        });
+
+        // Login/Register tabs
         document.getElementById("loginTab").addEventListener("click", () => {
             document.getElementById("loginForm").classList.remove("hidden");
             document.getElementById("registerForm").classList.add("hidden");
@@ -315,7 +515,8 @@
                     email: email,
                     name: name,
                     rounds: [],
-                    handicap: 36
+                    handicap: 36,
+                    isAdmin: false
                 });
                 document.getElementById("authMessage").innerText = "";
             } catch (err) {
@@ -323,7 +524,7 @@
             }
         });
 
-        // Submit round
+        // Submit individual round
         document.getElementById("submitRoundBtn").addEventListener("click", async () => {
             const courseName = document.getElementById("courseName").value.trim();
             const grossScore = parseFloat(document.getElementById("grossScore").value);
@@ -333,7 +534,17 @@
                 alert("Please fill all fields correctly.");
                 return;
             }
-            await addRound(grossScore, courseRating, slopeRating, courseName);
+            const diff = ((grossScore - courseRating) * 113) / slopeRating;
+            const roundedDiff = Math.round(diff * 10) / 10;
+            const roundData = {
+                date: new Date().toISOString(),
+                grossScore: grossScore,
+                courseRating: courseRating,
+                slopeRating: slopeRating,
+                courseName: courseName,
+                differential: roundedDiff
+            };
+            await addRoundToUser(currentUser.uid, roundData, true);
             document.getElementById("courseName").value = '';
             document.getElementById("grossScore").value = '';
             document.getElementById("courseRating").value = '';
@@ -341,6 +552,26 @@
             await loadUserData();
             await loadClubSummary();
         });
+
+        // Bulk upload
+        document.getElementById("uploadCsvBtn").addEventListener("click", async () => {
+            const fileInput = document.getElementById("csvFile");
+            if (!fileInput.files.length) {
+                alert("Please select a CSV file.");
+                return;
+            }
+            const file = fileInput.files[0];
+            const text = await file.text();
+            try {
+                const rows = parseCSV(text);
+                await processBulkUpload(rows);
+            } catch (err) {
+                document.getElementById("uploadStatus").innerHTML = `Error: ${err.message}`;
+            }
+        });
+
+        // Export PDF
+        document.getElementById("exportPdfBtn").addEventListener("click", exportToPDF);
 
         // Logout
         document.getElementById("logoutBtn").addEventListener("click", async () => {
